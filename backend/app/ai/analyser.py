@@ -5,19 +5,30 @@ from app.models.email import Email
 
 load_dotenv()
 
-# Toggle this to False when you want to use real Claude API
-USE_MOCK = True
+USE_MOCK = False
 
 MOCK_RESPONSE = {
-    "category": "Legal",
+    "category": "court_tribunal",
     "urgency": "High",
     "summary": "Client requesting urgent update on property settlement case.",
     "draft_reply": "Dear [Sender], thank you for reaching out. I am currently reviewing the details of your case and will provide a comprehensive update shortly. Please do not hesitate to contact me if you have any immediate concerns."
 }
 
+VALID_CATEGORIES = [
+    "court_tribunal",
+    "client_matters",
+    "opposing_counsel",
+    "community_probono",
+    "law_society",
+    "admin_finance"
+]
+
 def parse_analysis(text: str) -> dict:
     result = {}
-    for line in text.strip().split('\n'):
+    lines = text.strip().split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
         if line.startswith('Category:'):
             result['category'] = line.replace('Category:', '').strip()
         elif line.startswith('Urgency:'):
@@ -25,7 +36,14 @@ def parse_analysis(text: str) -> dict:
         elif line.startswith('Summary:'):
             result['summary'] = line.replace('Summary:', '').strip()
         elif line.startswith('Draft Reply:'):
-            result['draft_reply'] = line.replace('Draft Reply:', '').strip()
+            draft_lines = [line.replace('Draft Reply:', '').strip()]
+            i += 1
+            while i < len(lines):
+                draft_lines.append(lines[i].strip())
+                i += 1
+            result['draft_reply'] = '\n'.join(draft_lines).strip()
+            break
+        i += 1
     return result
 
 def analyse_email(email: Email) -> Email:
@@ -47,29 +65,25 @@ def analyse_email(email: Email) -> Email:
         messages=[
             {
                 "role": "user",
-                "content": f"""Analyse this email and return:
-1. Category (Legal, Client, Community, Admin, Personal)
-2. Urgency (High / Medium / Low)
-3. A brief one-line summary
-4. A draft reply that is professional and tailored (not generic)
+                "content": f"""You are an AI assistant for a Victorian lawyer in solo practice in Australia.
+
+Analyse this email and respond in EXACTLY this format with no extra text:
+Category: <one of: court_tribunal, client_matters, opposing_counsel, community_probono, law_society, admin_finance>
+Urgency: <one of: High, Medium, Low>
+Summary: <one line summary>
+Draft Reply: <full professional draft reply tailored to this specific email>
 
 Email:
 From: {email.sender}
 Subject: {email.subject}
 Body: {email.body}
-
-Format your response exactly like this:
-Category: ...
-Urgency: ...
-Summary: ...
-Draft Reply: ...
 """
             }
         ]
     )
     result = parse_analysis(message.content[0].text)
-    email.category = result.get('category')
-    email.urgency = result.get('urgency')
-    email.summary = result.get('summary')
-    email.draft_reply = result.get('draft_reply')
+    email.category = result.get('category', 'admin_finance')
+    email.urgency = result.get('urgency', 'Low')
+    email.summary = result.get('summary', '')
+    email.draft_reply = result.get('draft_reply', '')
     return email

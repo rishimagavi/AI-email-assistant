@@ -46,7 +46,7 @@ function EmailList({ emails, onSelect, selectedId }) {
 }
 
 function EmailDetail({ email, onBack, isMobile }) {
-  const [draft, setDraft] = useState(email.draftReply)
+  const [draft, setDraft] = useState(email.draft_reply || email.draftReply || '')
   const [sent, setSent] = useState(false)
 
   function handleSend() {
